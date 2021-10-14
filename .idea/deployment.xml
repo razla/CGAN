@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="razla@132.72.67.156:22 (3)" remoteFilesAllowedToDisappearOnAutoupload="false" autoUploadExternalChanges="true">
+  <component name="PublishConfigData" autoUpload="Always" serverName="razla@132.72.67.167:22" remoteFilesAllowedToDisappearOnAutoupload="false" autoUploadExternalChanges="true">
     <serverData>
       <paths name="razla@132.72.40.191:22">
         <serverdata>
@@ -101,6 +101,13 @@
         </serverdata>
       </paths>
       <paths name="razla@132.72.67.156:22 (3)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/storage/users/assafzar/Raz" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="razla@132.72.67.167:22">
         <serverdata>
           <mappings>
             <mapping deploy="/storage/users/assafzar/Raz" local="$PROJECT_DIR$" />
