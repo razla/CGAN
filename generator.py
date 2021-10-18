@@ -155,7 +155,7 @@ class Generator(nn.Module):
         d5 = self.down4(d4)
         d6 = self.down5(d5)
         d7 = self.down6(d6)
-        bottleneck = self.bottleneck(d7)            # (1, 512, 1, 1)
+        bottleneck = self.bottleneck(d7)            # (16, 512, 1, 1)
         up1 = self.up1(bottleneck)                  # (1, 512, 2, 2)
         up2 = self.up2(torch.cat([up1, d7], dim=1))
         up3 = self.up3(torch.cat([up2, d6], dim=1))
@@ -167,8 +167,8 @@ class Generator(nn.Module):
         return self.final_up(torch.cat([up7, d1], dim=1))
 
 def test():
-    x = torch.randn((1, 3, 256, 256))
-    model = Generator(in_channels=3, features=64)
+    x = torch.randn((16, 1, 256, 256))
+    model = Generator(in_channels=1, features=64)
     preds = model(x)
     print(preds.shape)
 

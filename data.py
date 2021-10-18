@@ -1,24 +1,33 @@
+import os
+import config
+import random
 import numpy as np
 import pandas as pd
-from patchify import patchify
 import tifffile as tiff
-import time
-import os
+from patchify import patchify
+from PIL import Image
+import cv2
 
-TRAIN_FRACTION = 0.75
 
-def load_data(organelle_name='Mitochondria'):
+def load_data(organelle_name='Mitochondria', download=True):
 
     base_dir = '/storage/users/assafzar'
     fovs_dir = os.path.join(base_dir, 'fovs')
-    image_save_dir = os.path.join(base_dir, 'Raz')
-    patches_save_dir = os.path.join(image_save_dir, 'data/', organelle_name)
+    image_save_dir = os.path.join(base_dir, 'Raz', 'data/')
+    patches_train_dir = os.path.join(image_save_dir, organelle_name, 'train/')
+    patches_val_dir = os.path.join(image_save_dir, organelle_name, 'val/')
 
     data_save_path_train = '{}/image_list_train.csv'.format(image_save_dir)
     data_save_path_tets = '{}/image_list_test.csv'.format(image_save_dir)
 
     if not os.path.exists(image_save_dir):
         os.makedirs(image_save_dir)
+
+    if not os.path.exists(patches_train_dir):
+        os.makedirs(patches_train_dir)
+
+    if not os.path.exists(patches_val_dir):
+        os.makedirs(patches_val_dir)
 
     # Read csv
     data_manifest = pd.read_csv(os.path.join(fovs_dir, 'metadata.csv'))
@@ -51,34 +60,78 @@ def load_data(organelle_name='Mitochondria'):
     df["path_tiff"] = images_source_paths
     df["bf_channel"] = data_manifest["ChannelNumberBrightfield"].values
     df["org_channel"] = data_manifest["ChannelNumberStruct"].values
-    brightfield_images = []
-    fluorescent_images = []
+    images = []
+
     # Iterate over the rows in the data frame
     for index, row in df.iterrows():
-        image_stack = tiff.imread(row['path_tiff'])
-        bf_channel = row['bf_channel']
-        fluor_channel = row['org_channel']
-        mid_slice = np.int(0.5 * image_stack.shape[0])
-        bf_image = image_stack[mid_slice, bf_channel, :, :]
-        fluor_image = image_stack[mid_slice, fluor_channel, :, :]
-        brightfield_images.append(bf_image)
-        fluorescent_images.append(fluor_image)
+        try:
+            if random.uniform(0, 1) < config.TRAIN_FRACTION:
+                is_train = True
+            else:
+                is_train = False
 
-        # print(bf_image.shape)
-        # bf_patches = patchify(bf_image, (52, 77), step=52)
-        # print(bf_patches.shape)
-        # for i in range(bf_patches.shape[0]):
-        #     for j in range(bf_patches.shape[1]):
-        #         print(f'Current: {i}, {j}, total: {bf_patches.shape[0]}, {bf_patches.shape[1]}')
-        #         single_patch_bf_img = bf_patches[i, j, :, :]
-        #         tiff.imwrite(patches_save_dir + '/bf/image_' + str('first') + '_' + str(i) + str(j) + '.tiff',
-        #                      single_patch_bf_img)
-        #         # single_patch_org_img = org_image[i, j, :, :]
-        #         # tiff.imwrite(patches_save_dir + '/org/image_' + str('first') + '_' + str(i) + str(j) + '.tiff',
-        #         #              single_patch_org_img)
+            print(f'Image #{index}: training - {is_train}')
 
-    return brightfield_images, fluorescent_images
+            # reading the tiff
+            image_stack = tiff.imread(row['path_tiff'])
+
+            # extracting the brightfield channel num
+            bf_channel = row['bf_channel']
+
+            # extracting the fluorescent channel num
+            fluor_channel = row['org_channel']
+
+            # taking the mid slice - best visualization
+            mid_slice = np.int(0.5 * image_stack.shape[0])
+
+            # taking one image of brightfield from the tiff
+            bf_image = image_stack[mid_slice, bf_channel, :, :]
+
+            # taking one image of fluorescent from the tiff
+            fluor_image = image_stack[mid_slice, fluor_channel, :, :]
+
+            # Patchify -> creating 180x180 patches
+            if not download:
+                images.append((bf_image, fluor_image))
+            else:
+                bf_patches = patchify(bf_image,
+                                      (config.PATCH_SIZE, config.PATCH_SIZE),
+                                      step=config.STEP_SIZE)
+                fluor_patches = patchify(fluor_image,
+                                         (config.PATCH_SIZE, config.PATCH_SIZE),
+                                         step=config.STEP_SIZE)
+                for i in range(bf_patches.shape[0]):
+                    for j in range(bf_patches.shape[1]):
+                        single_patch_bf_img = bf_patches[i, j, :, :]
+                        single_patch_fluor_img = fluor_patches[i, j, :, :]
+
+                        # Normalise to range 0..255
+                        single_bf_norm_img = (single_patch_bf_img.astype(
+                            np.float) - single_patch_bf_img.min()) * 255.0 / (
+                                                     single_patch_bf_img.max() - single_patch_bf_img.min())
+
+                        single_fluor_norm_img = (single_patch_fluor_img.astype(
+                            np.float) - single_patch_fluor_img.min()) * 255.0 / (
+                                                        single_patch_fluor_img.max() - single_patch_fluor_img.min())
+
+                        concatenated_img = cv2.hconcat([single_bf_norm_img, single_fluor_norm_img])
+
+                        if is_train:
+                            # if not os.path.exists(patches_train_dir + '/' + str(index)):
+                            #     os.makedirs(patches_train_dir + '/' + str(index))
+                            path = patches_train_dir + '/' + str(index) + '_' + str(i) + '_' + str(j) + '.png'
+                        else:
+                            # if not os.path.exists(patches_val_dir + '/' + str(index)):
+                            #     os.makedirs(patches_val_dir + '/' + str(index))
+                            path = patches_val_dir + '/' + str(index) + '_' + str(i) + '_' + str(j) + '.png'
+
+                        # Save as 8-bit PNG
+                        Image.fromarray(concatenated_img.astype(np.uint8)).save(path)
+
+        except Exception:
+            pass
+    return images
 
 
 if __name__ == '__main__':
-    brightfield_images, fluorescent_images = load_data()
+    images = load_data(organelle_name='Mitochondria')
